@@ -1,12 +1,11 @@
 import streamlit as st
 import os
-import zipfile
-from google.generativeai import GenerativeModel, embed_content
+from google.generativeai import GenerativeModel
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import FakeEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 # -----------------------------
-# 1) CHROMA DB LOAD (zip'ten çıkarma yok çünkü sen direkt repo'ya yükledin)
+# 1) CHROMA DB LOAD
 # -----------------------------
 
 DB_PATH = "chroma_db"
@@ -14,9 +13,12 @@ DB_PATH = "chroma_db"
 if not os.path.exists(DB_PATH):
     st.error("Chroma DB not found. Make sure 'chroma_db' folder is in the repo.")
 else:
+    # FakeEmbeddings yerine gerçek BGE-base kullanılacak
+    emb = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
+
     db = Chroma(
         persist_directory=DB_PATH,
-        embedding_function=FakeEmbeddings(size=768)
+        embedding_function=emb
     )
 
 # -----------------------------
@@ -28,20 +30,15 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 llm = GenerativeModel("gemini-pro")
 
-def embed_query(text):
-    res = embed_content(
-        model="models/text-embedding-004",
-        content=text
-    )
-    return res["embedding"]
-
 # -----------------------------
 # 3) RAG PIPELINE
 # -----------------------------
 
 def ask_rag(question):
-    q_emb = embed_query(question)
-    
+    # ❗ Soru embedding artık BGE-base ile yapılacak (Gemini değil)
+    q_emb = emb.embed_query(question)
+
+    # Chroma araması
     results = db.similarity_search_by_vector(q_emb, k=3)
 
     context = "\n\n".join(
