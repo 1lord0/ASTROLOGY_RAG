@@ -1,21 +1,27 @@
 import streamlit as st
 import os
+# google-genai kütüphanesi için doğru importlar
 import google.generativeai as genai
+from google.generativeai import GenerativeModel 
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from google.generativeai import GenerativeModel # Kalsın ama kullanılmayacak
 
 # -----------------------------
 # 0) API VE KÜTÜPHANE AYARLARI
 # -----------------------------
 
-# API Anahtarını yükle ve client'ı yapılandır
+# API Anahtarını yükle ve yapılandır
 if "GEMINI_API_KEY" not in st.secrets:
-    st.error("GEMINI_API_KEY, Streamlit Secrets'ta tanımlanmalıdır.")
+    st.error("❌ HATA: 'GEMINI_API_KEY', Streamlit Secrets'ta tanımlanmalıdır.")
     st.stop()
     
+# genai'yi API anahtarıyla yapılandır
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-client = genai.Client() # Doğrudan API Client'ı oluşturuluyor
+
+# 🛑 1. Hata Çözümü: GenerativeModel kullanılıyor (AttributeError'ı çözer)
+# client = genai.Client() satırı silindi.
+# Hızlı ve stabil bir model kullanıyoruz.
+llm = GenerativeModel("gemini-1.5-flash")
 
 # -----------------------------
 # 1) CHROMA DB LOAD
@@ -24,10 +30,11 @@ client = genai.Client() # Doğrudan API Client'ı oluşturuluyor
 DB_PATH = "chroma_db"
 
 if not os.path.exists(DB_PATH):
-    st.error("Chroma DB not found. Lütfen 'build_index.py' dosyasını çalıştırın.")
+    st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı. Lütfen 'build_index.py' dosyasını çalıştırın.")
     st.stop()
 
-# 🛑 ÖNEMLİ DEĞİŞİKLİK: build_index.py ile AYNI modeli kullanıyoruz
+# 🛑 2. Hata Çözümü: Veri yükleme kodu ile aynı modeli kullanıyoruz (InvalidArgumentError'ı çözer)
+# Lütfen build_index.py dosyanızda da BAAI/bge-base-en-v1.5 kullandığınızdan emin olun.
 emb = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
 
 db = Chroma(
@@ -63,11 +70,8 @@ def ask_rag(question):
     {question}
     """
 
-    # 🛑 ÖNEMLİ DEĞİŞİKLİK: Doğrudan genai.Client() üzerinden çağırma
-    answer = client.models.generate_content(
-        model="gemini-1.5-flash", # Hızlı ve stabil bir model
-        contents=prompt
-    )
+    # 🛑 API Çağrısı: Oluşturulan llm nesnesi kullanılıyor.
+    answer = llm.generate_content(prompt)
     
     return answer.text, results
 
@@ -83,7 +87,7 @@ question = st.text_input("Your question:")
 if question:
     # Boş sorgu kontrolü
     if not question.strip():
-        st.warning("Please enter a non-empty question.")
+        st.warning("Lütfen boş olmayan bir soru girin.")
     else:
         with st.spinner("Consulting the stars..."):
             try:
@@ -98,6 +102,5 @@ if question:
                     st.write(c.page_content)
                     
             except Exception as e:
-                # API hatasını kullanıcı dostu bir şekilde göster
-                st.error(f"An error occurred while consulting Gemini. Check your API key and connection.")
-                # st.exception(e) # Streamlit Cloud'da detayları göstermek riskli olabilir
+                # API hatalarını daha genel yakalar
+                st.error(f"❌ Bir hata oluştu. API anahtarınızın geçerli olduğunu veya kota limitinizi kontrol edin. Detay: {type(e).__name__}")
