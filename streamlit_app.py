@@ -16,24 +16,31 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 llm = GenerativeModel("gemini-1.5-flash")
 
 # -----------------------------
-# 1) CHROMA DB LOAD
+# 1) CHROMA DB LOAD (Embedding Lazy Loading)
 # -----------------------------
 DB_PATH = "chroma_db"
 if not os.path.exists(DB_PATH):
     st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı.")
     st.stop()
 
-# 🔥 build_index.py ile AYNI MODEL kullanılıyor
-emb = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={'device': 'cpu'},  # Streamlit Cloud için gerekli
-    encode_kwargs={'normalize_embeddings': True}
-)
+# 🔥 Embedding modelini sadece gerektiğinde yükle
+@st.cache_resource
+def get_embeddings():
+    """Embeddings'i cache'le - bir kez yükle"""
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
+    )
 
-db = Chroma(
-    persist_directory=DB_PATH,
-    embedding_function=emb
-)
+@st.cache_resource
+def get_vectordb():
+    """Vektör veritabanını cache'le"""
+    emb = get_embeddings()
+    return Chroma(
+        persist_directory=DB_PATH,
+        embedding_function=emb
+    )
 
 # -----------------------------
 # 2) RAG PIPELINE
@@ -41,18 +48,17 @@ db = Chroma(
 def ask_rag(question):
     """Kullanıcı sorusuna RAG ile cevap verir."""
     
-    # Soru embedding'i oluştur
-    q_emb_list = emb.embed_documents([question])
-    q_emb = q_emb_list[0]
-    
-    # Benzer dökümanları bul
-    results = db.similarity_search_by_vector(q_emb, k=3)
-    
-    # Context oluştur
-    context = "\n\n".join([chunk.page_content for chunk in results])
-    
-    # Prompt oluştur
-    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu yanıtla.
+    try:
+        db = get_vectordb()
+        
+        # Direkt text ile arama (embedding hesaplanmış)
+        results = db.similarity_search(question, k=3)
+        
+        # Context oluştur
+        context = "\n\n".join([chunk.page_content for chunk in results])
+        
+        # Prompt oluştur
+        prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu yanıtla.
 
 BAĞLAM:
 {context}
@@ -60,11 +66,16 @@ BAĞLAM:
 SORU: {question}
 
 YANIT (Türkçe ve detaylı):"""
+        
+        # Gemini API çağrısı
+        response = llm.generate_content(prompt)
+        
+        return response.text, results
     
-    # Gemini API çağrısı
-    response = llm.generate_content(prompt)
-    
-    return response.text, results
+    except Exception as e:
+        st.error(f"Model yükleme hatası: {str(e)}")
+        st.info("💡 Lütfen Python 3.11 kullanın veya packages.txt ekleyin")
+        return None, []
 
 # -----------------------------
 # 3) STREAMLIT UI
@@ -79,9 +90,9 @@ if st.button("Sorgula") or question:
         st.warning("⚠️ Lütfen geçerli bir soru girin.")
     else:
         with st.spinner("Yıldızlara danışılıyor..."):
-            try:
-                answer, chunks = ask_rag(question)
-                
+            answer, chunks = ask_rag(question)
+            
+            if answer:
                 st.subheader("🌟 Cevap")
                 st.write(answer)
                 
@@ -90,8 +101,3 @@ if st.button("Sorgula") or question:
                         st.markdown(f"**Kaynak {i}:**")
                         st.text(c.page_content[:300] + "...")
                         st.divider()
-                        
-            except Exception as e:
-                st.error(f"❌ Bir hata oluştu: {type(e).__name__}")
-                st.error(f"Detay: {str(e)}")
-                st.info("💡 API anahtarınızı ve kota limitinizi kontrol edin.")
