@@ -23,10 +23,10 @@ if not os.path.exists(DB_PATH):
     st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı.")
     st.stop()
 
-# 🔥 ÖNEMLİ: model_kwargs ile device ayarı
+# 🔥 build_index.py ile AYNI MODEL kullanılıyor
 emb = HuggingFaceEmbeddings(
-    model_name="BAAI/bge-base-en-v1.5",
-    model_kwargs={'device': 'cpu'},  # CPU kullanımını zorla
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_kwargs={'device': 'cpu'},  # Streamlit Cloud için gerekli
     encode_kwargs={'normalize_embeddings': True}
 )
 
@@ -70,7 +70,7 @@ YANIT (Türkçe ve detaylı):"""
 # 3) STREAMLIT UI
 # -----------------------------
 st.title("🔮 Astrology RAG Chatbot")
-st.write("Astroloji hakkında her şeyi sorabilirsiniz.")
+st.write("Astroloji hakkında her şeyi sorabilirsiniz. Gemini + ChromaDB ile güçlendirilmiştir.")
 
 question = st.text_input("Sorunuz:")
 
@@ -94,3 +94,4 @@ if st.button("Sorgula") or question:
             except Exception as e:
                 st.error(f"❌ Bir hata oluştu: {type(e).__name__}")
                 st.error(f"Detay: {str(e)}")
+                st.info("💡 API anahtarınızı ve kota limitinizi kontrol edin.")
