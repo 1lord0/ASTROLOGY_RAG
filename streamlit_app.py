@@ -66,53 +66,53 @@ def search_documents(query, documents, k=3):
 # 3) RAG FONKSİYONU
 # -----------------------------
 def ask_rag(question):
-    """Türkçe soru → İngilizce arama → RAG → Türkçe cevap"""
+    """Türkçe soru → İngilizce soruya çevir → RAG → Türkçe cevaba çevir"""
 
     # ---------------------------------
-    # 1) TÜRKÇE → İNGİLİZCE ÇEVİR
+    # 1) TÜRKÇE SORUYU İNGİLİZCEYE ÇEVİR
     # ---------------------------------
     translate_prompt = f"""
 Translate the following Turkish question into English.
-Return ONLY the translation. No explanations, no alternatives.
+Return ONLY the translation. No explanation. No alternatives.
 
-Turkish question:
+Turkish:
 {question}
 """
     try:
-        translated = llm.generate_content(translate_prompt).text.strip()
+        translated_question = llm.generate_content(translate_prompt).text.strip()
     except:
-        translated = question  # fallback
+        translated_question = question  # fallback
 
-    # Dökümanları yükle
+    # ---------------------------------
+    # 2) RAG ARAMASI (İngilizce soru ile)
+    # ---------------------------------
     docs = load_documents()
     if not docs:
         return "❌ Dökümanlar yüklenemedi.", []
 
-    # İngilizce soruyla döküman araması
-    relevant_docs = search_documents(translated, docs, k=3)
+    relevant_docs = search_documents(translated_question, docs, k=3)
 
     if not relevant_docs:
         return "❌ Sorunuzla ilgili bilgi bulunamadı.", []
 
-    # RAG context oluştur
     context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
 
     # ---------------------------------
-    # 2) RAG → İNGİLİZCE CEVAP ÜRET
+    # 3) RAG → İNGİLİZCE CEVAP ÜRET
     # ---------------------------------
     rag_prompt = f"""
 You are an astrology expert.
 
 Use ONLY the context below to answer the question.
-If the answer is not in the context, say "The information is not in the provided documents."
+If the answer is not in the context, say: "The information is not in the provided documents."
 
 CONTEXT:
 {context}
 
 QUESTION:
-{translated}
+{translated_question}
 
-ANSWER IN ENGLISH (no extra text, only answer):
+ANSWER IN ENGLISH (only the answer, no extra text):
 """
     try:
         english_answer = llm.generate_content(rag_prompt).text.strip()
@@ -121,17 +121,17 @@ ANSWER IN ENGLISH (no extra text, only answer):
         return None, relevant_docs
 
     # ---------------------------------
-    # 3) İNGİLİZCE → TÜRKÇE ÇEVİR
+    # 4) İNGİLİZCE CEVABI TÜRKÇEYE ÇEVİR
     # ---------------------------------
-    turkish_prompt = f"""
+    translate_back_prompt = f"""
 Translate the following English answer into natural Turkish.
 Return ONLY the translation.
 
-English answer:
+English:
 {english_answer}
 """
     try:
-        turkish_answer = llm.generate_content(turkish_prompt).text.strip()
+        turkish_answer = llm.generate_content(translate_back_prompt).text.strip()
     except:
         turkish_answer = english_answer
 
@@ -219,6 +219,7 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
 
 
