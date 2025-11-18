@@ -66,40 +66,60 @@ def search_documents(query, documents, k=3):
 # 3) RAG FONKSİYONU
 # -----------------------------
 def ask_rag(question):
-    """Soru-cevap sistemi"""
-    
+    """Türkçe soru → İngilizce arama → İngilizce cevap → Türkçe dönüş"""
+
+    # 1) Kullanıcı sorusunu İngilizceye çevir
+    translate_prompt = f"Translate this Turkish question to English, do NOT answer: {question}"
+    try:
+        translated = llm.generate_content(translate_prompt).text
+    except:
+        translated = question  # çeviri çalışmazsa orijinal soruyu kullan
+
     # Dökümanları yükle
     docs = load_documents()
     if not docs:
         return "❌ Dökümanlar yüklenemedi.", []
-    
-    # İlgili dökümanları bul
-    relevant_docs = search_documents(question, docs, k=3)
-    
-    if not relevant_docs:
-        return "❌ Sorunuzla ilgili bilgi bulunamadı. Lütfen farklı kelimeler deneyin.", []
-    
-    # Context oluştur
-    context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
-    
-    # Prompt
-    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
 
-BAĞLAM:
+    # 2) İngilizce soruyla döküman araması
+    relevant_docs = search_documents(translated, docs, k=3)
+
+    if not relevant_docs:
+        return "❌ Sorunuzla ilgili bilgi bulunamadı.", []
+
+    # RAG context oluştur
+    context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
+
+    # 3) İngilizce cevap oluştur (RAG)
+    rag_prompt = f"""
+You are an astrology expert.
+
+Use ONLY the context below to answer the question in English.
+Do NOT hallucinate.
+
+CONTEXT:
 {context}
 
-SORU: {question}
+QUESTION:
+{translated}
 
-YANIT (detaylı ve Türkçe):"""
-    
+ANSWER IN ENGLISH:
+"""
+
     try:
-        # Gemini'ye sor
-        response = llm.generate_content(prompt)
-        return response.text, relevant_docs
-    
+        english_answer = llm.generate_content(rag_prompt).text
     except Exception as e:
         st.error(f"API Hatası: {str(e)}")
-        return None, []
+        return None, relevant_docs
+
+    # 4) İngilizce cevabı Türkçeye çevir
+    turkish_prompt = f"Bu cevabı Türkçeye çevir ve doğal bir dille yaz: {english_answer}"
+    try:
+        turkish_answer = llm.generate_content(turkish_prompt).text
+    except:
+        turkish_answer = english_answer
+
+    return turkish_answer, relevant_docs
+
 
 # -----------------------------
 # 4) STREAMLIT ARAYÜZÜ
@@ -181,4 +201,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
