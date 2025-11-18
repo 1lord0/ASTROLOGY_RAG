@@ -66,8 +66,8 @@ def search_documents(query, documents, k=3):
 # 3) RAG FONKSİYONU
 # -----------------------------
 def ask_rag(question):
-        translate_prompt = f"""
-Translate the following Turkish question into English and while doing that protect the tone.
+    translate_prompt = f"""
+Translate the following Turkish question into English.
 Return ONLY the translation. No explanation. No alternatives.
 
 Turkish:
@@ -76,7 +76,8 @@ Turkish:
     try:
         translated_question = llm.generate_content(translate_prompt).text.strip()
     except:
-        translated_question = question  # fallback
+        translated_question = question
+        
     """Soru-cevap sistemi"""
     
     # Dökümanları yükle
@@ -193,5 +194,6 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
 
