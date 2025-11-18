@@ -6,7 +6,7 @@ from google.generativeai import GenerativeModel
 
 # -----------------------------
 # 0) API AYARLARI
-# -----------------------------
+# --------------- ------------- 
 if "GEMINI_API_KEY" not in st.secrets:
     st.error("❌ HATA: 'GEMINI_API_KEY', Streamlit Secrets'ta tanımlanmalıdır.")
     st.stop()
@@ -66,78 +66,40 @@ def search_documents(query, documents, k=3):
 # 3) RAG FONKSİYONU
 # -----------------------------
 def ask_rag(question):
-    """Türkçe soru → İngilizce soruya çevir → RAG → Türkçe cevaba çevir"""
-
-    # ---------------------------------
-    # 1) TÜRKÇE SORUYU İNGİLİZCEYE ÇEVİR
-    # ---------------------------------
-    translate_prompt = f"""
-Translate the following Turkish question into English.
-Return ONLY the translation. No explanation. No alternatives.
-
-Turkish:
-{question}
-"""
-    try:
-        translated_question = llm.generate_content(translate_prompt).text.strip()
-    except:
-        translated_question = question  # fallback
-
-    # ---------------------------------
-    # 2) RAG ARAMASI (İngilizce soru ile)
-    # ---------------------------------
+    """Soru-cevap sistemi"""
+    
+    # Dökümanları yükle
     docs = load_documents()
     if not docs:
         return "❌ Dökümanlar yüklenemedi.", []
-
-    relevant_docs = search_documents(translated_question, docs, k=3)
-
+    
+    # İlgili dökümanları bul
+    relevant_docs = search_documents(question, docs, k=3)
+    
     if not relevant_docs:
-        return "❌ Sorunuzla ilgili bilgi bulunamadı.", []
-
+        return "❌ Sorunuzla ilgili bilgi bulunamadı. Lütfen farklı kelimeler deneyin.", []
+    
+    # Context oluştur
     context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
+    
+    # Prompt
+    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
 
-    # ---------------------------------
-    # 3) RAG → İNGİLİZCE CEVAP ÜRET
-    # ---------------------------------
-    rag_prompt = f"""
-You are an astrology expert.
-
-Use ONLY the context below to answer the question.
-If the answer is not in the context, say: "The information is not in the provided documents."
-
-CONTEXT:
+BAĞLAM:
 {context}
 
-QUESTION:
-{translated_question}
+SORU: {question}
 
-ANSWER IN ENGLISH (only the answer, no extra text):
-"""
+YANIT (detaylı ve Türkçe):"""
+    
     try:
-        english_answer = llm.generate_content(rag_prompt).text.strip()
+        # Gemini'ye sor
+        response = llm.generate_content(prompt)
+        return response.text, relevant_docs
+    
     except Exception as e:
         st.error(f"API Hatası: {str(e)}")
-        return None, relevant_docs
-
-    # ---------------------------------
-    # 4) İNGİLİZCE CEVABI TÜRKÇEYE ÇEVİR
-    # ---------------------------------
-    translate_back_prompt = f"""
-Translate the following English answer into natural Turkish.
-Return ONLY the translation.
-
-English:
-{english_answer}
-"""
-    try:
-        turkish_answer = llm.generate_content(translate_back_prompt).text.strip()
-    except:
-        turkish_answer = english_answer
-
-    return turkish_answer, relevant_docs
-
-
+        return None, []
 
 # -----------------------------
 # 4) STREAMLIT ARAYÜZÜ
@@ -219,7 +181,3 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-
-
-
-
