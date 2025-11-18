@@ -6,13 +6,13 @@ from google.generativeai import GenerativeModel
 
 # -----------------------------
 # 0) API AYARLARI
-# --------------- ------------- 
+# -----------------------------
 if "GEMINI_API_KEY" not in st.secrets:
     st.error("❌ HATA: 'GEMINI_API_KEY', Streamlit Secrets'ta tanımlanmalıdır.")
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-llm = GenerativeModel("gemini-2.5-flash")
+llm = GenerativeModel("gemini-2.0-flash-exp")
 
 # -----------------------------
 # 1) DÖKÜMAN YÜKLEME
@@ -32,10 +32,28 @@ def load_documents():
     return docs
 
 # -----------------------------
-# 2) ARAMA FONKSİYONU
+# 2) TÜRKÇE → İNGİLİZCE ÇEVİRİ
+# -----------------------------
+def translate_to_english(turkish_text):
+    """Türkçe soruyu İngilizce'ye çevir"""
+    prompt = f"""Aşağıdaki Türkçe metni İngilizce'ye çevir. Sadece çeviriyi yaz, başka bir şey ekleme.
+
+Türkçe: {turkish_text}
+
+İngilizce:"""
+    
+    try:
+        response = llm.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        st.error(f"Çeviri Hatası: {str(e)}")
+        return turkish_text  # Hata durumunda orijinal metni döndür
+
+# -----------------------------
+# 3) ARAMA FONKSİYONU
 # -----------------------------
 def search_documents(query, documents, k=3):
-    """Basit keyword-based arama"""
+    """Basit keyword-based arama (İngilizce query ile)"""
     query_lower = query.lower()
     query_words = set(query_lower.split())
     
@@ -63,18 +81,23 @@ def search_documents(query, documents, k=3):
     return [doc for score, doc in scores[:k] if score > 0]
 
 # -----------------------------
-# 3) RAG FONKSİYONU
+# 4) RAG FONKSİYONU
 # -----------------------------
 def ask_rag(question):
-    """Soru-cevap sistemi"""
+    """Soru-cevap sistemi (Türkçe soru → İngilizce arama → Türkçe cevap)"""
     
     # Dökümanları yükle
     docs = load_documents()
     if not docs:
         return "❌ Dökümanlar yüklenemedi.", []
     
-    # İlgili dökümanları bul
-    relevant_docs = search_documents(question, docs, k=3)
+    # Türkçe soruyu İngilizce'ye çevir
+    with st.spinner("🔄 Soru İngilizce'ye çevriliyor..."):
+        english_question = translate_to_english(question)
+        st.info(f"🔍 Arama sorgusu: {english_question}")
+    
+    # İlgili dökümanları bul (İngilizce query ile)
+    relevant_docs = search_documents(english_question, docs, k=3)
     
     if not relevant_docs:
         return "❌ Sorunuzla ilgili bilgi bulunamadı. Lütfen farklı kelimeler deneyin.", []
@@ -82,13 +105,13 @@ def ask_rag(question):
     # Context oluştur
     context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
     
-    # Prompt
-    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
+    # Prompt (Türkçe cevap isteyeceğiz)
+    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki İngilizce bilgileri kullanarak soruyu Türkçe olarak yanıtla.
 
-BAĞLAM:
+BAĞLAM (İngilizce):
 {context}
 
-SORU: {question}
+SORU (Türkçe): {question}
 
 YANIT (detaylı ve Türkçe):"""
     
@@ -102,7 +125,7 @@ YANIT (detaylı ve Türkçe):"""
         return None, []
 
 # -----------------------------
-# 4) STREAMLIT ARAYÜZÜ
+# 5) STREAMLIT ARAYÜZÜ
 # -----------------------------
 st.set_page_config(
     page_title="Astrology RAG Chatbot",
@@ -111,7 +134,7 @@ st.set_page_config(
 )
 
 st.title("🔮 Astrology RAG Chatbot")
-st.markdown("Astroloji hakkında her şeyi sorun! **Gemini AI** ile güçlendirilmiştir.")
+st.markdown("Astroloji hakkında **Türkçe** soru sorun! **Gemini AI** ile güçlendirilmiştir.")
 
 # Sidebar - Sistem bilgileri
 with st.sidebar:
@@ -129,9 +152,14 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 💡 İpuçları")
     st.markdown("""
-    - Spesifik sorular sorun
-    - Burç isimleri kullanın
-    - Astroloji terimleri ekleyin
+    - ✅ Türkçe soru sorun
+    - 🔄 Otomatik İngilizce'ye çevrilir
+    - 🌟 Türkçe cevap alırsınız
+    
+    **Örnek sorular:**
+    - Koç burcunun özellikleri nelerdir?
+    - Aşağan yayın burcu nedir?
+    - Yükselen burcun etkisi nedir?
     """)
 
 # Ana içerik
@@ -139,7 +167,7 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     question = st.text_input(
-        "Sorunuzu yazın:",
+        "Sorunuzu Türkçe yazın:",
         placeholder="Örn: Koç burcunun özellikleri nelerdir?"
     )
 
@@ -177,8 +205,7 @@ if search_button or (question and len(question) > 3):
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray;'>"
-    "Powered by Google Gemini 1.5 Flash 🚀"
+    "Powered by Google Gemini 2.0 Flash 🚀 | Türkçe Destekli 🇹🇷"
     "</div>",
     unsafe_allow_html=True
 )
-
