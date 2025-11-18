@@ -12,7 +12,7 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-llm = GenerativeModel("gemini-1.5-flash")
+llm = GenerativeModel("gemini-2.5-flash")
 
 # -----------------------------
 # 1) DÖKÜMAN YÜKLEME
@@ -181,3 +181,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
