@@ -2,11 +2,11 @@ import streamlit as st
 import os
 import google.generativeai as genai
 from google.generativeai import GenerativeModel 
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+import chromadb
+from chromadb.config import Settings
 
 # -----------------------------
-# 0) API VE KÜTÜPHANE AYARLARI
+# 0) API AYARLARI
 # -----------------------------
 if "GEMINI_API_KEY" not in st.secrets:
     st.error("❌ HATA: 'GEMINI_API_KEY', Streamlit Secrets'ta tanımlanmalıdır.")
@@ -16,31 +16,30 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 llm = GenerativeModel("gemini-1.5-flash")
 
 # -----------------------------
-# 1) CHROMA DB LOAD (Embedding Lazy Loading)
+# 1) CHROMA DB LOAD (Direkt ChromaDB Client)
 # -----------------------------
 DB_PATH = "chroma_db"
 if not os.path.exists(DB_PATH):
     st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı.")
     st.stop()
 
-# 🔥 Embedding modelini sadece gerektiğinde yükle
 @st.cache_resource
-def get_embeddings():
-    """Embeddings'i cache'le - bir kez yükle"""
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
-
-@st.cache_resource
-def get_vectordb():
-    """Vektör veritabanını cache'le"""
-    emb = get_embeddings()
-    return Chroma(
-        persist_directory=DB_PATH,
-        embedding_function=emb
-    )
+def get_chroma_client():
+    """ChromaDB'yi direkt yükle - embedding modeli YOK"""
+    client = chromadb.PersistentClient(path=DB_PATH)
+    
+    # Koleksiyonu al (varsayılan isim: langchain)
+    try:
+        collection = client.get_collection(name="langchain")
+        return collection
+    except Exception as e:
+        st.error(f"Koleksiyon bulunamadı: {e}")
+        # Tüm koleksiyonları listele
+        collections = client.list_collections()
+        if collections:
+            st.info(f"Mevcut koleksiyonlar: {[c.name for c in collections]}")
+            return collections[0]  # İlkini al
+        return None
 
 # -----------------------------
 # 2) RAG PIPELINE
@@ -48,14 +47,26 @@ def get_vectordb():
 def ask_rag(question):
     """Kullanıcı sorusuna RAG ile cevap verir."""
     
+    collection = get_chroma_client()
+    if not collection:
+        return "❌ Vektör veritabanı yüklenemedi.", []
+    
     try:
-        db = get_vectordb()
+        # ChromaDB query (embedding yapmadan text araması)
+        results = collection.query(
+            query_texts=[question],
+            n_results=3
+        )
         
-        # Direkt text ile arama (embedding hesaplanmış)
-        results = db.similarity_search(question, k=3)
+        # Sonuçları işle
+        if not results['documents'] or not results['documents'][0]:
+            return "❌ İlgili döküman bulunamadı.", []
+        
+        docs = results['documents'][0]
+        metadatas = results['metadatas'][0] if results['metadatas'] else [{}] * len(docs)
         
         # Context oluştur
-        context = "\n\n".join([chunk.page_content for chunk in results])
+        context = "\n\n".join(docs)
         
         # Prompt oluştur
         prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu yanıtla.
@@ -70,11 +81,19 @@ YANIT (Türkçe ve detaylı):"""
         # Gemini API çağrısı
         response = llm.generate_content(prompt)
         
-        return response.text, results
+        # Sonuçları formatla
+        formatted_results = []
+        for doc, meta in zip(docs, metadatas):
+            formatted_results.append({
+                'content': doc,
+                'metadata': meta
+            })
+        
+        return response.text, formatted_results
     
     except Exception as e:
-        st.error(f"Model yükleme hatası: {str(e)}")
-        st.info("💡 Lütfen Python 3.11 kullanın veya packages.txt ekleyin")
+        st.error(f"Arama hatası: {type(e).__name__}")
+        st.error(f"Detay: {str(e)}")
         return None, []
 
 # -----------------------------
@@ -82,6 +101,13 @@ YANIT (Türkçe ve detaylı):"""
 # -----------------------------
 st.title("🔮 Astrology RAG Chatbot")
 st.write("Astroloji hakkında her şeyi sorabilirsiniz. Gemini + ChromaDB ile güçlendirilmiştir.")
+
+# Debug info
+with st.expander("🔧 Sistem Bilgisi"):
+    col = get_chroma_client()
+    if col:
+        st.success(f"✅ Koleksiyon: {col.name}")
+        st.info(f"📊 Toplam döküman: {col.count()}")
 
 question = st.text_input("Sorunuz:")
 
@@ -96,8 +122,11 @@ if st.button("Sorgula") or question:
                 st.subheader("🌟 Cevap")
                 st.write(answer)
                 
-                with st.expander("🔍 Kaynak Dökümanlar"):
-                    for i, c in enumerate(chunks, 1):
-                        st.markdown(f"**Kaynak {i}:**")
-                        st.text(c.page_content[:300] + "...")
-                        st.divider()
+                if chunks:
+                    with st.expander("🔍 Kaynak Dökümanlar"):
+                        for i, c in enumerate(chunks, 1):
+                            st.markdown(f"**Kaynak {i}:**")
+                            st.text(c['content'][:300] + "...")
+                            if c['metadata']:
+                                st.caption(f"Metadata: {c['metadata']}")
+                            st.divider()
