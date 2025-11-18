@@ -83,7 +83,8 @@ def ask_rag(question):
     context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
     
     # Prompt
-    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
+    prompt = f"""Sen bir astroloji uzmanısın.soruyu ingilizceye anlamıyla çevir. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
+ 
 
 BAĞLAM:
 {context}
@@ -181,3 +182,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
