@@ -178,7 +178,7 @@ st.set_page_config(
 )
 
 st.title("🔮 Astrology RAG Chatbot")
-st.markdown("Astroloji hakkında **Türkçe** soru sorun! **Gemini AI** ile güçlendirilmiştir.")
+st.markdown("Astroloji hakkındaki sorularınız rag ile kitaptan getirilecektir.Cevap gemini ile türetiliyor")
 
 # Sidebar - Sistem bilgileri
 with st.sidebar:
@@ -253,3 +253,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
