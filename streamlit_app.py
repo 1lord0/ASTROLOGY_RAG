@@ -22,13 +22,10 @@ DB_PATH = "chroma_db"
 if not os.path.exists(DB_PATH):
     st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı. Lütfen 'build_index.py' dosyasını çalıştırın.")
     st.stop()
-
-emb = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
-db = Chroma(
-    persist_directory=DB_PATH,
-    embedding_function=emb
+emb = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2",  # Daha hafif
+    model_kwargs={'device': 'cpu'}
 )
-
 # -----------------------------
 # 2) RAG PIPELINE
 # -----------------------------
@@ -89,3 +86,4 @@ if st.button("Sorgula") or question:
                 st.error(f"❌ Bir hata oluştu: {type(e).__name__}")
                 st.error(f"Detay: {str(e)}")
                 st.info("💡 API anahtarınızı ve kota limitinizi kontrol edin.")
+
