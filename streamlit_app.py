@@ -3,6 +3,7 @@ import json
 import os
 import google.generativeai as genai
 from google.generativeai import GenerativeModel
+from deep_translator import GoogleTranslator
 
 # -----------------------------
 # 0) API AYARLARI
@@ -12,7 +13,7 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-llm = GenerativeModel("gemini-2.0-flash-exp")
+llm = GenerativeModel("gemini-1.5-flash")  # Daha stabil model
 
 # -----------------------------
 # 1) DÖKÜMAN YÜKLEME
@@ -32,21 +33,17 @@ def load_documents():
     return docs
 
 # -----------------------------
-# 2) TÜRKÇE → İNGİLİZCE ÇEVİRİ
+# 2) TÜRKÇE → İNGİLİZCE ÇEVİRİ (ÜCRETSİZ)
 # -----------------------------
+@st.cache_data(ttl=3600)  # 1 saat cache
 def translate_to_english(turkish_text):
-    """Türkçe soruyu İngilizce'ye çevir"""
-    prompt = f"""Aşağıdaki Türkçe metni İngilizce'ye çevir. Sadece çeviriyi yaz, başka bir şey ekleme.
-
-Türkçe: {turkish_text}
-
-İngilizce:"""
-    
+    """Türkçe soruyu İngilizce'ye çevir (Google Translate - ücretsiz)"""
     try:
-        response = llm.generate_content(prompt)
-        return response.text.strip()
+        translator = GoogleTranslator(source='tr', target='en')
+        english_text = translator.translate(turkish_text)
+        return english_text
     except Exception as e:
-        st.error(f"Çeviri Hatası: {str(e)}")
+        st.warning(f"⚠️ Çeviri hatası: {str(e)}")
         return turkish_text  # Hata durumunda orijinal metni döndür
 
 # -----------------------------
@@ -205,7 +202,7 @@ if search_button or (question and len(question) > 3):
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray;'>"
-    "Powered by Google Gemini 2.0 Flash 🚀 | Türkçe Destekli 🇹🇷"
+    "Powered by Google Gemini 1.5 Flash 🚀 | Türkçe Çeviri: Google Translate 🇹🇷"
     "</div>",
     unsafe_allow_html=True
 )
