@@ -8,19 +8,24 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 # 1) CHROMA DB LOAD
 # -----------------------------
 
+# -----------------------------
+# 1) CHROMA DB LOAD
+# -----------------------------
+
 DB_PATH = "chroma_db"
 
 if not os.path.exists(DB_PATH):
     st.error("Chroma DB not found. Make sure 'chroma_db' folder is in the repo.")
 else:
-    # FakeEmbeddings yerine gerçek BGE-base kullanılacak
-    emb = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
+    # ESKİ: emb = HuggingFaceEmbeddings(model_name="BAAI/bge-base-en-v1.5")
+    # YENİ: Veri yüklemede kullanılan modeli kullanın
+    emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2") # <--- BU SATIRI DEĞİŞTİRİN
 
     db = Chroma(
         persist_directory=DB_PATH,
         embedding_function=emb
     )
-
+# ... (Geri kalan kod aynı kalabilir)
 # -----------------------------
 # 2) GEMINI MODEL SETUP
 # -----------------------------
@@ -81,3 +86,4 @@ if question:
     for i, c in enumerate(chunks):
         st.markdown(f"**Chunk {i+1}:**")
         st.write(c.page_content)
+
