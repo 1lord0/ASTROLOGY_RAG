@@ -67,45 +67,53 @@ def search_documents(query, documents, k=3):
 # -----------------------------
 def ask_rag(question):
 
-    translate_prompt = f"""
-    Translate the following Turkish question into natural English that would
-    appear in an astrology book. Keep meaning the same but use the most common
-    astrology terms.
-
-    Do NOT translate word-for-word.
-    Do NOT change the meaning.
-    Make it sound like a question a native speaker would ask.
+    # 1) Convert user question → short English search keyword
+    search_prompt = f"""
+    Convert the following Turkish question into a short English search keyword 
+    that perfectly matches astrology book sections.
     
+    Return ONLY the keyword.
+
     TURKISH:
     {question}
-    
-    ENGLISH (natural):
-    """
-    
-    try:
-        translated_question = llm.generate_content(translate_prompt).text.strip()
-    except:
-        translated_question = question  # fallback
-    
 
-    
-    # Dökümanları yükle
-    docs = load_documents()
+    SEARCH:
+    """
+
+    try:
+        search_term = llm.generate_content(search_prompt).text.strip()
+    except:
+        search_term = question
+
+    # 2) Perform RAG search
+    docs = vectorstore.similarity_search(search_term, k=3)
+
+    # 3) If no docs found
     if not docs:
-        return "❌ Dökümanlar yüklenemedi.", []
-    
-    # İlgili dökümanları bul
-    relevant_docs = search_documents(question, docs, k=3)
-    
-    if not relevant_docs:
-        return "❌ Sorunuzla ilgili bilgi bulunamadı. Lütfen farklı kelimeler deneyin.", []
-    
-    # Context oluştur
-    context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
-    
-    # Prompt
-    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
- 
+        return "Bu soruya uygun bilgi bulunamadı."
+
+    # 4) Summarize the answer with the LLM
+    context = "\n".join([d.page_content for d in docs])
+
+    answer_prompt = f"""
+    Use the following context from an astrology book and answer the question
+    in Turkish.
+
+    QUESTION (TR):
+    {question}
+
+    SEARCH TERM (EN):
+    {search_term}
+
+    CONTEXT:
+    {context}
+
+    ANSWER (TR):
+    """
+
+    answer = llm.generate_content(answer_prompt).text.strip()
+
+    return answer
 
 BAĞLAM:
 {context}
@@ -203,6 +211,7 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
 
 
