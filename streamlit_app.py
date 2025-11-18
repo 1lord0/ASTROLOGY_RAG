@@ -33,7 +33,7 @@ else:
 import google.generativeai as genai
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-llm = GenerativeModel("gemini-1.5-flash")
+llm = GenerativeModel("text-bison-001")
 
 # -----------------------------
 # 3) RAG PIPELINE
@@ -86,5 +86,6 @@ if question:
     for i, c in enumerate(chunks):
         st.markdown(f"**Chunk {i+1}:**")
         st.write(c.page_content)
+
 
 
