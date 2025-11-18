@@ -47,34 +47,24 @@ db = Chroma(
 # -----------------------------
 
 def ask_rag(question):
-    # Soru embedding
-    q_emb = emb.embed_query(question)
+    # 🛑 Hata Çözümü: embed_query yerine embed_documents kullanılıyor
+    # embed_documents bir liste bekler ve bir liste döndürür.
+    q_emb_list = emb.embed_documents([question])
+    
+    # Listenin ilk (ve tek) öğesini alıyoruz:
+    q_emb = q_emb_list[0] 
 
     # Chroma araması
     results = db.similarity_search_by_vector(q_emb, k=3)
 
-    context = "\n\n".join(
-        f"---Chunk---\n{doc.page_content}" for doc in results
-    )
-
-    prompt = f"""
-    Act like you have been a professional astrologer for decades.
-    Use ONLY the context below when generating the answer.
-    After giving the English answer, translate it into Turkish
-    in the SAME tone and style.
-
-    CONTEXT:
-    {context}
-
-    QUESTION:
-    {question}
-    """
-
-    # 🛑 API Çağrısı: Oluşturulan llm nesnesi kullanılıyor.
+    # ... (Geri kalan kod aynı)
+    # ... (context oluşturma)
+    # ... (prompt oluşturma)
+    
+    # API Çağrısı: Oluşturulan llm nesnesi kullanılıyor.
     answer = llm.generate_content(prompt)
     
     return answer.text, results
-
 # -----------------------------
 # 3) STREAMLIT UI
 # -----------------------------
@@ -104,3 +94,4 @@ if question:
             except Exception as e:
                 # API hatalarını daha genel yakalar
                 st.error(f"❌ Bir hata oluştu. API anahtarınızın geçerli olduğunu veya kota limitinizi kontrol edin. Detay: {type(e).__name__}")
+
