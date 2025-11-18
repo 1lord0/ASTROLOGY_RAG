@@ -68,15 +68,18 @@ def search_documents(query, documents, k=3):
 def ask_rag(question):
 
     translate_prompt = f"""
-    Translate the following Turkish sentence into English EXACTLY word for word.
-    Do NOT rewrite, shorten, expand, paraphrase, or change the structure.
-    Do NOT add or remove any meaning.
-    Return ONLY the literal English translation.
+    Translate the following Turkish question into natural English that would
+    appear in an astrology book. Keep meaning the same but use the most common
+    astrology terms.
+
+    Do NOT translate word-for-word.
+    Do NOT change the meaning.
+    Make it sound like a question a native speaker would ask.
     
     TURKISH:
     {question}
     
-    ENGLISH (literal):
+    ENGLISH (natural):
     """
     
     try:
@@ -200,6 +203,7 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
 
 
