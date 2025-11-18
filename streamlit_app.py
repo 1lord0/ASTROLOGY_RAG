@@ -1,9 +1,8 @@
 import streamlit as st
 import os
 import google.generativeai as genai
-from google.generativeai import GenerativeModel 
-import chromadb
-from chromadb.config import Settings
+from google.generativeai import GenerativeModel
+import json
 
 # -----------------------------
 # 0) API AYARLARI
@@ -16,60 +15,59 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 llm = GenerativeModel("gemini-1.5-flash")
 
 # -----------------------------
-# 1) CHROMA DB LOAD (Direkt ChromaDB Client)
+# 1) BASIT JSON VEKTÖR DEPOSU
 # -----------------------------
-DB_PATH = "chroma_db"
-if not os.path.exists(DB_PATH):
-    st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı.")
-    st.stop()
-
-@st.cache_resource
-def get_chroma_client():
-    """ChromaDB'yi direkt yükle - embedding modeli YOK"""
-    client = chromadb.PersistentClient(path=DB_PATH)
+@st.cache_data
+def load_documents():
+    """Chroma DB yerine basit JSON kullan"""
+    json_path = "documents.json"
     
-    # Koleksiyonu al (varsayılan isim: langchain)
-    try:
-        collection = client.get_collection(name="langchain")
-        return collection
-    except Exception as e:
-        st.error(f"Koleksiyon bulunamadı: {e}")
-        # Tüm koleksiyonları listele
-        collections = client.list_collections()
-        if collections:
-            st.info(f"Mevcut koleksiyonlar: {[c.name for c in collections]}")
-            return collections[0]  # İlkini al
-        return None
+    # Eğer JSON yoksa, chroma_db'den oku (bir kerelik)
+    if not os.path.exists(json_path):
+        st.warning("⚠️ documents.json bulunamadı. Lütfen lokal olarak oluşturun.")
+        return []
+    
+    with open(json_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 # -----------------------------
-# 2) RAG PIPELINE
+# 2) BASIT ARAMA FONKSİYONU
+# -----------------------------
+def simple_search(query, documents, k=3):
+    """Keyword-based basit arama"""
+    query_words = set(query.lower().split())
+    
+    scores = []
+    for doc in documents:
+        doc_words = set(doc['content'].lower().split())
+        score = len(query_words & doc_words)  # Ortak kelime sayısı
+        scores.append((score, doc))
+    
+    # Skorlara göre sırala
+    scores.sort(reverse=True, key=lambda x: x[0])
+    return [doc for score, doc in scores[:k]]
+
+# -----------------------------
+# 3) RAG PIPELINE
 # -----------------------------
 def ask_rag(question):
     """Kullanıcı sorusuna RAG ile cevap verir."""
     
-    collection = get_chroma_client()
-    if not collection:
-        return "❌ Vektör veritabanı yüklenemedi.", []
+    docs = load_documents()
+    if not docs:
+        return "❌ Dökümanlar yüklenemedi. Lütfen documents.json dosyasını oluşturun.", []
     
-    try:
-        # ChromaDB query (embedding yapmadan text araması)
-        results = collection.query(
-            query_texts=[question],
-            n_results=3
-        )
-        
-        # Sonuçları işle
-        if not results['documents'] or not results['documents'][0]:
-            return "❌ İlgili döküman bulunamadı.", []
-        
-        docs = results['documents'][0]
-        metadatas = results['metadatas'][0] if results['metadatas'] else [{}] * len(docs)
-        
-        # Context oluştur
-        context = "\n\n".join(docs)
-        
-        # Prompt oluştur
-        prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu yanıtla.
+    # Basit arama
+    results = simple_search(question, docs, k=3)
+    
+    if not results:
+        return "❌ İlgili döküman bulunamadı.", []
+    
+    # Context oluştur
+    context = "\n\n".join([doc['content'] for doc in results])
+    
+    # Prompt oluştur
+    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu yanıtla.
 
 BAĞLAM:
 {context}
@@ -77,37 +75,27 @@ BAĞLAM:
 SORU: {question}
 
 YANIT (Türkçe ve detaylı):"""
-        
+    
+    try:
         # Gemini API çağrısı
         response = llm.generate_content(prompt)
-        
-        # Sonuçları formatla
-        formatted_results = []
-        for doc, meta in zip(docs, metadatas):
-            formatted_results.append({
-                'content': doc,
-                'metadata': meta
-            })
-        
-        return response.text, formatted_results
-    
+        return response.text, results
     except Exception as e:
-        st.error(f"Arama hatası: {type(e).__name__}")
-        st.error(f"Detay: {str(e)}")
+        st.error(f"API Hatası: {str(e)}")
         return None, []
 
 # -----------------------------
-# 3) STREAMLIT UI
+# 4) STREAMLIT UI
 # -----------------------------
 st.title("🔮 Astrology RAG Chatbot")
-st.write("Astroloji hakkında her şeyi sorabilirsiniz. Gemini + ChromaDB ile güçlendirilmiştir.")
+st.write("Astroloji hakkında her şeyi sorabilirsiniz.")
 
 # Debug info
 with st.expander("🔧 Sistem Bilgisi"):
-    col = get_chroma_client()
-    if col:
-        st.success(f"✅ Koleksiyon: {col.name}")
-        st.info(f"📊 Toplam döküman: {col.count()}")
+    docs = load_documents()
+    st.info(f"📊 Toplam döküman: {len(docs)}")
+    if docs:
+        st.success("✅ Dökümanlar yüklendi")
 
 question = st.text_input("Sorunuz:")
 
@@ -127,6 +115,4 @@ if st.button("Sorgula") or question:
                         for i, c in enumerate(chunks, 1):
                             st.markdown(f"**Kaynak {i}:**")
                             st.text(c['content'][:300] + "...")
-                            if c['metadata']:
-                                st.caption(f"Metadata: {c['metadata']}")
                             st.divider()
