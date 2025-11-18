@@ -66,6 +66,17 @@ def search_documents(query, documents, k=3):
 # 3) RAG FONKSİYONU
 # -----------------------------
 def ask_rag(question):
+        translate_prompt = f"""
+Translate the following Turkish question into English and while doing that protect the tone.
+Return ONLY the translation. No explanation. No alternatives.
+
+Turkish:
+{question}
+"""
+    try:
+        translated_question = llm.generate_content(translate_prompt).text.strip()
+    except:
+        translated_question = question  # fallback
     """Soru-cevap sistemi"""
     
     # Dökümanları yükle
@@ -83,7 +94,7 @@ def ask_rag(question):
     context = "\n\n---\n\n".join([doc['content'] for doc in relevant_docs])
     
     # Prompt
-    prompt = f"""Sen bir astroloji uzmanısın.soruyu ingilizceye anlamıyla çevir. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
+    prompt = f"""Sen bir astroloji uzmanısın. Aşağıdaki bilgileri kullanarak soruyu Türkçe olarak yanıtla.
  
 
 BAĞLAM:
@@ -182,4 +193,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
