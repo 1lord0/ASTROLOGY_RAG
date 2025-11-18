@@ -13,7 +13,7 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-llm = GenerativeModel("gemini-2.5-flash")  # Daha stabil model
+llm = GenerativeModel("gemini-2.5-flash")  # Güncel model
 
 # -----------------------------
 # 1) DÖKÜMAN YÜKLEME
@@ -35,12 +35,59 @@ def load_documents():
 # -----------------------------
 # 2) TÜRKÇE → İNGİLİZCE ÇEVİRİ (ÜCRETSİZ)
 # -----------------------------
+
+# Astroloji terimleri sözlüğü
+ASTROLOGY_TERMS = {
+    # Burçlar
+    "koç": "aries",
+    "boğa": "taurus",
+    "ikizler": "gemini",
+    "yengeç": "cancer",
+    "aslan": "leo",
+    "başak": "virgo",
+    "terazi": "libra",
+    "akrep": "scorpio",
+    "yay": "sagittarius",
+    "oğlak": "capricorn",
+    "kova": "aquarius",
+    "balık": "pisces",
+    
+    # Astroloji terimleri
+    "yükselen": "ascendant",
+    "ay burcu": "moon sign",
+    "güneş burcu": "sun sign",
+    "yükselen burcu": "rising sign",
+    "astroloji": "astrology",
+    "burç": "zodiac sign",
+    "burcu": "sign",
+    "harita": "chart",
+    "natal": "natal",
+    "transit": "transit",
+    "evler": "houses",
+    "gezegenler": "planets",
+    "aspects": "aspects",
+    "retrograd": "retrograde",
+}
+
 @st.cache_data(ttl=3600)  # 1 saat cache
 def translate_to_english(turkish_text):
-    """Türkçe soruyu İngilizce'ye çevir (Google Translate - ücretsiz)"""
+    """Türkçe soruyu İngilizce'ye çevir (astroloji terimleriyle)"""
     try:
+        # Önce astroloji terimlerini değiştir
+        text_lower = turkish_text.lower()
+        translated_terms = turkish_text
+        
+        for tr_term, en_term in ASTROLOGY_TERMS.items():
+            if tr_term in text_lower:
+                # Kelime sınırlarını kontrol et (başında/sonunda boşluk veya noktalama)
+                import re
+                pattern = r'\b' + re.escape(tr_term) + r'\b'
+                translated_terms = re.sub(pattern, en_term, translated_terms, flags=re.IGNORECASE)
+        
+        # Sonra Google Translate ile geri kalanı çevir
         translator = GoogleTranslator(source='tr', target='en')
-        english_text = translator.translate(turkish_text)
+        english_text = translator.translate(translated_terms)
+        
         return english_text
     except Exception as e:
         st.warning(f"⚠️ Çeviri hatası: {str(e)}")
@@ -202,8 +249,7 @@ if search_button or (question and len(question) > 3):
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray;'>"
-    "Powered by Google Gemini 1.5 Flash 🚀 | Türkçe Çeviri: Google Translate 🇹🇷"
+    "Powered by Google Gemini 2.5 Flash 🚀 | Türkçe Çeviri: Google Translate 🇹🇷"
     "</div>",
     unsafe_allow_html=True
 )
-
