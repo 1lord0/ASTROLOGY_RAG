@@ -69,8 +69,7 @@ def ask_rag(question):
 # ---------------------------------
 # 1) TÜRKÇE SORUYU İNGİLİZCEYE ÇEVİR (LITERAL)
 # ---------------------------------
-translate_prompt = f"""
-Translate the following Turkish sentence into English EXACTLY word for word.
+translate_prompt = f"""Translate the following Turkish sentence into English EXACTLY word for word.
 Do NOT rewrite, shorten, expand, paraphrase, or change the structure.
 Do NOT add or remove any meaning.
 Return ONLY the literal English translation.
@@ -201,6 +200,7 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
 
 
 
