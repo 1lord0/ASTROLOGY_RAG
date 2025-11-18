@@ -20,12 +20,21 @@ llm = GenerativeModel("gemini-1.5-flash")
 # -----------------------------
 DB_PATH = "chroma_db"
 if not os.path.exists(DB_PATH):
-    st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı. Lütfen 'build_index.py' dosyasını çalıştırın.")
+    st.error("❌ HATA: Chroma DB ('chroma_db' klasörü) bulunamadı.")
     st.stop()
+
+# 🔥 ÖNEMLİ: model_kwargs ile device ayarı
 emb = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",  # Daha hafif
-    model_kwargs={'device': 'cpu'}
+    model_name="BAAI/bge-base-en-v1.5",
+    model_kwargs={'device': 'cpu'},  # CPU kullanımını zorla
+    encode_kwargs={'normalize_embeddings': True}
 )
+
+db = Chroma(
+    persist_directory=DB_PATH,
+    embedding_function=emb
+)
+
 # -----------------------------
 # 2) RAG PIPELINE
 # -----------------------------
@@ -61,7 +70,7 @@ YANIT (Türkçe ve detaylı):"""
 # 3) STREAMLIT UI
 # -----------------------------
 st.title("🔮 Astrology RAG Chatbot")
-st.write("Astroloji hakkında her şeyi sorabilirsiniz. Gemini + ChromaDB ile güçlendirilmiştir.")
+st.write("Astroloji hakkında her şeyi sorabilirsiniz.")
 
 question = st.text_input("Sorunuz:")
 
@@ -85,5 +94,3 @@ if st.button("Sorgula") or question:
             except Exception as e:
                 st.error(f"❌ Bir hata oluştu: {type(e).__name__}")
                 st.error(f"Detay: {str(e)}")
-                st.info("💡 API anahtarınızı ve kota limitinizi kontrol edin.")
-
